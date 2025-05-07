@@ -3,6 +3,7 @@ import cv2
 import json
 import numpy as np
 import open3d as o3d
+from scipy.spatial.transform import Rotation as R
 import smplx
 import torch
 
@@ -22,58 +23,78 @@ def main():
                          ext                    = 'npz', 
                          use_pca                = False,
                          use_face_contour       = False,
-                         num_betas              = 10,
+                        #  num_betas              = 10,
                          num_expression_coeffs  = 10)
     print(model)
 
     with open('data/human/115463_0.json', 'r') as f: 
         body                = json.load(f)
-        global_orient       = np.array(body['pred_smpl_params']['global_orient'])
+        global_orient       = np.array(body['pred_smpl_params']['global_orient'])   # (1, 3, 3)
         body_pose           = np.array(body['pred_smpl_params']['body_pose'])[:21]  # (23, 3, 3) -> (21, 3, 3)
-        betas               = np.array(body['pred_smpl_params']['betas'])
+        # betas               = np.array(body['pred_smpl_params']['betas'])
+
+        left_elbow_rot = body_pose[17]
+        right_elbow_rot = body_pose[18]
 
         global_orient = rotmats_to_axisangle(global_orient).reshape(1, 3)
         body_pose = rotmats_to_axisangle(body_pose).reshape(1, 21 * 3)
     
     left_hand, right_hand = [], []
+    left_wrist_rot, right_wrist_rot = [], []
     with open('data/hamer/115463_0.json', 'r') as f: 
         h0                  = json.load(f)
         is_right_h0         = h0['is_right']
         global_orient_h0    = np.array(h0['pred_mano_params']['global_orient'])
         body_pose_h0        = np.array(h0['pred_mano_params']['hand_pose'])  # (15, 3, 3)
-        betas_h0            = np.array(h0['pred_mano_params']['betas'])
+        # betas_h0            = np.array(h0['pred_mano_params']['betas'])
         if is_right_h0: 
             right_hand.append(body_pose_h0)
+            right_wrist_rot.append(global_orient_h0)
         else: 
             left_hand.append(body_pose_h0)
+            left_wrist_rot.append(global_orient_h0)
     with open('data/hamer/115463_1.json', 'r') as f: 
         h1                  = json.load(f)
         is_right_h1         = h1['is_right']
         global_orient_h1    = np.array(h1['pred_mano_params']['global_orient'])
         body_pose_h1        = np.array(h1['pred_mano_params']['hand_pose'])  # (15, 3, 3)
-        betas_h1            = np.array(h1['pred_mano_params']['betas'])
+        # betas_h1            = np.array(h1['pred_mano_params']['betas'])
         if is_right_h1: 
             right_hand.append(body_pose_h1)
+            right_wrist_rot.append(global_orient_h1)
         else: 
             left_hand.append(body_pose_h1)
-    if len(left_hand)==0:
-        left_hand = [np.eye(3)[None].repeat(15,axis=0)]
-    if len(right_hand)==0:
-        right_hand = [np.eye(3)[None].repeat(15,axis=0)]
+            left_wrist_rot.append(global_orient_h1)
+
     left_hand  = rotmats_to_axisangle(np.vstack(left_hand)).reshape(1, 15 * 3)
     right_hand = rotmats_to_axisangle(np.vstack(right_hand)).reshape(1, 15 * 3)
 
     expression = np.zeros((1, model.num_expression_coeffs), dtype=np.float32)
 
+    M = np.diag([-1, 1, 1])
+    left_wrist_rot = M @ left_wrist_rot @ M
+
+    left_wrist = np.linalg.inv(left_elbow_rot) @ left_wrist_rot
+    right_wrist = np.linalg.inv(right_elbow_rot) @ right_wrist_rot
+
+    left_wrist = np.squeeze(left_wrist)
+    right_wrist = np.squeeze(right_wrist)
+
+    left_vec = R.from_matrix(left_wrist).as_rotvec()
+    right_vec = R.from_matrix(right_wrist).as_rotvec()
+
+    body_pose[0, 57:60] = left_vec
+    body_pose[0, 60:63] = right_vec
+
     t_global_orient = torch.from_numpy(global_orient).float()
     t_body_pose     = torch.from_numpy(body_pose).float()
-    t_betas         = torch.from_numpy(betas).float().unsqueeze(0)  
+    # t_betas         = torch.from_numpy(betas).float().unsqueeze(0)  
     t_expr          = torch.from_numpy(expression).float()
     t_left_hand     = torch.from_numpy(left_hand).float()
     t_right_hand    = torch.from_numpy(right_hand).float()
 
     output = model(
-        betas           = t_betas,          # shape (1,10)
+        # betas           = t_betas,          # shape (1,10)
         expression      = t_expr,           # shape (1,10)
         global_orient   = t_global_orient,  # shape (1,3)
         body_pose       = t_body_pose,      # shape (1,69)
