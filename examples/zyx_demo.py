@@ -83,6 +83,13 @@ def main():
     left_vec = R.from_matrix(left_wrist).as_rotvec()
     right_vec = R.from_matrix(right_wrist).as_rotvec()
 
+    θ         = np.linalg.norm(left_vec)
+    u         = left_vec / θ
+    left_vec  = u * (θ + np.pi)
+    θ         = np.linalg.norm(right_vec)
+    u         = right_vec / θ
+    right_vec = u * (θ + np.pi)
+
     body_pose[0, 57:60] = left_vec
     body_pose[0, 60:63] = right_vec
 
