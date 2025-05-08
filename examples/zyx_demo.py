@@ -7,107 +7,112 @@ from scipy.spatial.transform import Rotation as R
 import smplx
 import torch
 
+def R2aa(rot): 
+    return R.from_matrix(rot).as_rotvec()
 
-def rotmats_to_axisangle(rot_mats: np.ndarray) -> np.ndarray:
-    aa_list = []
-    for R in rot_mats:
-        rvec, _ = cv2.Rodrigues(R)   # rvec.shape == (3,1)
-        aa_list.append(rvec.flatten())
-    return np.stack(aa_list, axis=0)  # (K,3)
+
+def aa2R(aa):   
+    return R.from_rotvec(aa).as_matrix()
+
+
+def aa2R(aa, idx):
+    global_rotation = np.eye(3)
+    parents = [-1,  0,  0,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  9,  9, 12, 13, 14, 16, 17, 18, 19]
+    while idx != -1:
+        joint_rotation = R.from_rotvec(aa[idx]).as_matrix()
+        global_rotation = joint_rotation @ global_rotation
+        idx = parents[idx]
+    return global_rotation
+
+
+def Rs2aas(rots: np.ndarray) -> np.ndarray:
+    aas = []
+    for rot in rots:
+        aas.append(R2aa(rot))
+    return np.stack(aas, axis=0)
 
 
 def main():
-    model = smplx.create('models', 
-                         model_type             = 'smplx', 
-                         gender                 = 'male', 
-                         ext                    = 'npz', 
-                         use_pca                = False,
-                         use_face_contour       = False,
-                        #  num_betas              = 10,
-                         num_expression_coeffs  = 10)
-    print(model)
-
     with open('data/human/115463_0.json', 'r') as f: 
         body                = json.load(f)
-        global_orient       = np.array(body['pred_smpl_params']['global_orient'])   # (1, 3, 3)
-        body_pose           = np.array(body['pred_smpl_params']['body_pose'])[:21]  # (23, 3, 3) -> (21, 3, 3)
+        global_orient       = np.array(body['pred_smpl_params']['global_orient'][0])    # (1, 3, 3)
+        body_pose           = np.array(body['pred_smpl_params']['body_pose'])[:21]      # (23, 3, 3) -> (21, 3, 3)
         # betas               = np.array(body['pred_smpl_params']['betas'])
 
-        left_elbow_rot = body_pose[17]
-        right_elbow_rot = body_pose[18]
+        global_orient = R2aa(global_orient).reshape(1, 3)
+        body_pose = Rs2aas(body_pose).reshape(21, 3)                                    # (21, 3)
 
-        global_orient = rotmats_to_axisangle(global_orient).reshape(1, 3)
-        body_pose = rotmats_to_axisangle(body_pose).reshape(1, 21 * 3)
-    
-    left_hand, right_hand = [], []
-    left_wrist_rot, right_wrist_rot = [], []
     with open('data/hamer/115463_0.json', 'r') as f: 
         h0                  = json.load(f)
         is_right_h0         = h0['is_right']
-        global_orient_h0    = np.array(h0['pred_mano_params']['global_orient'])
-        body_pose_h0        = np.array(h0['pred_mano_params']['hand_pose'])  # (15, 3, 3)
+        global_orient_h0    = np.array(h0['pred_mano_params']['global_orient'][0])
+        body_pose_h0        = np.array(h0['pred_mano_params']['hand_pose'])             # (15, 3, 3)
         # betas_h0            = np.array(h0['pred_mano_params']['betas'])
         if is_right_h0: 
-            right_hand.append(body_pose_h0)
-            right_wrist_rot.append(global_orient_h0)
+            rh_go = global_orient_h0
+            rh_pose = body_pose_h0
         else: 
-            left_hand.append(body_pose_h0)
-            left_wrist_rot.append(global_orient_h0)
+            lh_go = global_orient_h0
+            lh_pose = body_pose_h0
+    
     with open('data/hamer/115463_1.json', 'r') as f: 
         h1                  = json.load(f)
         is_right_h1         = h1['is_right']
-        global_orient_h1    = np.array(h1['pred_mano_params']['global_orient'])
-        body_pose_h1        = np.array(h1['pred_mano_params']['hand_pose'])  # (15, 3, 3)
+        global_orient_h1    = np.array(h1['pred_mano_params']['global_orient'][0])
+        body_pose_h1        = np.array(h1['pred_mano_params']['hand_pose'])             # (15, 3, 3)
         # betas_h1            = np.array(h1['pred_mano_params']['betas'])
         if is_right_h1: 
-            right_hand.append(body_pose_h1)
-            right_wrist_rot.append(global_orient_h1)
+            rh_go = global_orient_h1
+            rh_pose = body_pose_h1
         else: 
-            left_hand.append(body_pose_h1)
-            left_wrist_rot.append(global_orient_h1)
+            lh_go = global_orient_h1
+            lh_pose = body_pose_h1
 
-    left_hand  = rotmats_to_axisangle(np.vstack(left_hand)).reshape(1, 15 * 3)
-    right_hand = rotmats_to_axisangle(np.vstack(right_hand)).reshape(1, 15 * 3)
+    # lh_go = R2aa(np.vstack(lh_go)).reshape(1, 3)
+    # rh_go = R2aa(np.vstack(rh_go)).reshape(1, 3)
+    # lh_go = lh_go[0]
+    # rh_go = rh_go[0]
+    lh_pose  = Rs2aas(lh_pose).reshape(15, 3)                                # (15, 3)
+    rh_pose = Rs2aas(rh_pose).reshape(15, 3)
 
-    expression = np.zeros((1, model.num_expression_coeffs), dtype=np.float32)
+    C = np.diag([1, -1, -1])
+    # print(lh_go.shape)
+    lh_go = C @ lh_go @ C
+    # rh_go = C @ rh_go @ C
 
-    M = np.diag([-1, 1, 1])
-    left_wrist_rot = M @ left_wrist_rot @ M
+    full_body_pose = np.vstack([global_orient, body_pose])
+    lh_elbow_R = aa2R(full_body_pose, 18)
+    rh_elbow_R = aa2R(full_body_pose, 19)
 
-    left_wrist = np.linalg.inv(left_elbow_rot) @ left_wrist_rot
-    right_wrist = np.linalg.inv(right_elbow_rot) @ right_wrist_rot
+    lh_wrist_R = lh_elbow_R.T @ lh_go
+    rh_wrist_R = rh_elbow_R.T @ rh_go
 
-    left_wrist = np.squeeze(left_wrist)
-    right_wrist = np.squeeze(right_wrist)
+    lh_wrist = R2aa(lh_wrist_R)
+    rh_wrist = R2aa(rh_wrist_R)
 
-    left_vec = R.from_matrix(left_wrist).as_rotvec()
-    right_vec = R.from_matrix(right_wrist).as_rotvec()
+    body_pose[19] = lh_wrist
+    body_pose[20] = rh_wrist
 
-    θ         = np.linalg.norm(left_vec)
-    u         = left_vec / θ
-    left_vec  = u * (θ + np.pi)
-    θ         = np.linalg.norm(right_vec)
-    u         = right_vec / θ
-    right_vec = u * (θ + np.pi)
+    # lh_pose[0] = lh_wrist
+    # rh_pose[0] = rh_wrist
 
-    body_pose[0, 57:60] = left_vec
-    body_pose[0, 60:63] = right_vec
-
-    t_global_orient = torch.from_numpy(global_orient).float()
-    t_body_pose     = torch.from_numpy(body_pose).float()
-    # t_betas         = torch.from_numpy(betas).float().unsqueeze(0)  
-    t_expr          = torch.from_numpy(expression).float()
-    t_left_hand     = torch.from_numpy(left_hand).float()
-    t_right_hand    = torch.from_numpy(right_hand).float()
+    model = smplx.create(
+        model_path="models", model_type="smplx", gender="male",
+        use_face_contour=False, use_pca=False, num_betas=10, num_expression_coeffs=10
+    )
+    print(model)
 
     output = model(
-        # betas           = t_betas,          # shape (1,10)
-        expression      = t_expr,           # shape (1,10)
-        global_orient   = t_global_orient,  # shape (1,3)
-        body_pose       = t_body_pose,      # shape (1,69)
-        left_hand_pose  = t_left_hand,      # shape (1,45)
-        right_hand_pose = t_right_hand,     # shape (1,45)
-        return_verts    = True
+        global_orient   = torch.tensor(global_orient.reshape(1, 3)).float(),            # (1 × 3)
+        body_pose       = torch.tensor(body_pose.reshape(1, 21 * 3)).float(),           # (1 × 21 × 3)
+        left_hand_pose  = torch.tensor(lh_pose.reshape(1, 15 * 3)).float(),             # (1 × 15 × 3)
+        right_hand_pose = torch.tensor(rh_pose.reshape(1, 15 * 3)).float(),             # (1 × 15 × 3)
+        jaw_pose        = torch.zeros(1,3),
+        left_eye_pose   = torch.zeros(1,3),
+        right_eye_pose  = torch.zeros(1,3),
+        expression      = torch.zeros(1,10),
+        betas           = torch.zeros(1,10),
+        return_vertices = True
     )
     vertices = output.vertices.detach().cpu().numpy().squeeze()
     joints = output.joints.detach().cpu().numpy().squeeze()
