@@ -12,7 +12,8 @@
 ## Data Preparation
 
 **Recording** <br>
-We use ORBBEC Femto Bolt RGBD Camera to record RGB and depth data, SDK [pyorbbecsdk](https://github.com/orbbec/pyorbbecsdk.git). The data specifications are `1920x1080, 30fps`. 
+We use ORBBEC Femto Bolt RGBD Camera to record RGB and depth data, SDK [pyorbbecsdk](https://github.com/orbbec/pyorbbecsdk.git). The data specifications are `1920x1080, 30fps`. <br>
+For better recording with `multi devices` and to record data `in pieces`, you can also refer to my own [pyorbbecsdk](https://github.com/YuxuanZhang271/pyorbbecsdk.git) repo. 
 
 **Tracking** <br>
 Body Tracking: [4D-Humans](https://github.com/shubham-goel/4D-Humans.git) <br>
@@ -80,7 +81,10 @@ root_folder
 
 
 ## Run Demo Code
-
+```bash
+conda activate smplx
+python align_hand2body.py
+```
 
 ## Outputs
 
