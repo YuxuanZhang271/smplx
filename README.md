@@ -12,22 +12,24 @@
 ## Data Preparation
 
 **Recording** <br>
-We use ORBBEC Femto Bolt RGBD Camera to record RGB and depth data, SDK [pyorbbecsdk](https://github.com/orbbec/pyorbbecsdk.git). The data specifications are `1920x1080, 30fps`. <br>
-For better recording with `multi devices` and to record data `in pieces`, you can also refer to my own [pyorbbecsdk](https://github.com/YuxuanZhang271/pyorbbecsdk.git) repo. 
+We use `ORBBEC Femto Bolt` RGBD Camera to record RGB and depth data, using the python version SDK [pyorbbecsdk](https://github.com/orbbec/pyorbbecsdk.git). The data specifications are `1920x1080, 30fps`. <br>
+For the basic recording with multi devices and to get RGB and depth images, you can refer to the code i provide at `demo/pyorbbecsdk_demo/`. For more recording or visualization codes, you can refer to my own [pyorbbecsdk](https://github.com/YuxuanZhang271/pyorbbecsdk.git) repo. 
 
 **Tracking** <br>
 Body Tracking: [4D-Humans](https://github.com/shubham-goel/4D-Humans.git) <br>
 Hand Tracking: [HAMER](https://github.com/geopavlakos/hamer.git) <br>
+You can also refer to the code i provided at `demo/4dHuman_demo.py` and `demo/hamer_demo.py`. 
+
 To get all the parameters you need, you need <br>
 `pred_smpl_params (global_orient, body_pose, betas), ` <br> 
 `scaled_focal_length, ` <br> 
 `pred_cam_t_full` from 4D-Humans, <br>
+
 and <br>
 `pred_mano_params (global_orient, hand_pose, betas), ` <br> 
 `is_right, ` <br> 
 `scaled_focal_length, ` <br> 
 `pred_cam_t_full` from HAMER. <br>
-You can also refer to the code i provided in `demo/` folder. 
 
 Put all the data into following folder: 
 ```bash
