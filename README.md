@@ -27,7 +27,7 @@ and <br>
 `is_right, ` <br> 
 `scaled_focal_length, ` <br> 
 `pred_cam_t_full` from HAMER. <br>
-You can also refer to the code i provided in demo folder. 
+You can also refer to the code i provided in `demo/` folder. 
 
 Put all the data into following folder: 
 ```bash
